@@ -1,37 +1,164 @@
 import random
+from collections import deque
 
-CELL = 40  # cell size in pixels
+
+# Size of each maze cell in pixels
+CELL = 40
+
 
 def generate_maze(cols, rows):
-    """Recursive backtracker maze generation. Returns 2D grid of walls."""
-    visited = [[False]*cols for _ in range(rows)]
-    # walls: each cell has [N, S, E, W]
-    walls = [[[True,True,True,True] for _ in range(cols)] for _ in range(rows)]
-    
-    def neighbors(r, c):
-        dirs = [(-1,0,0,1),(1,0,1,0),(0,1,2,3),(0,-1,3,2)]  # dr,dc,wall_dir,opp_dir
-        result = []
-        for dr,dc,wd,od in dirs:
-            nr,nc = r+dr,c+dc
-            if 0<=nr<rows and 0<=nc<cols and not visited[nr][nc]:
-                result.append((nr,nc,wd,od))
-        return result
+    """Generate a maze using recursive backtracking."""
 
-    stack = [(0,0)]
+    # Each cell has four walls:
+    # [North, South, East, West]
+    walls = [
+        [[True, True, True, True] for _ in range(cols)]
+        for _ in range(rows)
+    ]
+
+    visited = [
+        [False for _ in range(cols)]
+        for _ in range(rows)
+    ]
+
+    def get_neighbors(row, col):
+
+        directions = [
+            (-1, 0, 0, 1),  # North
+            (1, 0, 1, 0),   # South
+            (0, 1, 2, 3),   # East
+            (0, -1, 3, 2)   # West
+        ]
+
+        neighbors = []
+
+        for dr, dc, wall, opposite_wall in directions:
+
+            nr = row + dr
+            nc = col + dc
+
+            if (
+                0 <= nr < rows
+                and 0 <= nc < cols
+                and not visited[nr][nc]
+            ):
+                neighbors.append(
+                    (nr, nc, wall, opposite_wall)
+                )
+
+        return neighbors
+
+    # Start from top-left cell
+    stack = [(0, 0)]
     visited[0][0] = True
+
     while stack:
-        r,c = stack[-1]
-        nbrs = neighbors(r,c)
-        if nbrs:
-            nr,nc,wd,od = random.choice(nbrs)
-            walls[r][c][wd] = False
-            walls[nr][nc][od] = False
+
+        row, col = stack[-1]
+
+        neighbors = get_neighbors(row, col)
+
+        if neighbors:
+
+            nr, nc, wall, opposite_wall = random.choice(
+                neighbors
+            )
+
+            # Remove wall between current and next cell
+            walls[row][col][wall] = False
+            walls[nr][nc][opposite_wall] = False
+
             visited[nr][nc] = True
-            stack.append((nr,nc))
+
+            stack.append((nr, nc))
+
         else:
+
             stack.pop()
+
     return walls
 
-def cell_rect(r, c, import_pygame=None):
-    import pygame
-    return pygame.Rect(c*CELL, r*CELL, CELL, CELL)
+
+def find_shortest_path(walls, rows, cols):
+    """
+    Find the shortest path from (0, 0)
+    to (rows - 1, cols - 1) using BFS.
+    """
+
+    start = (0, 0)
+    goal = (rows - 1, cols - 1)
+
+    queue = deque()
+
+    queue.append(start)
+
+    # Remember how each cell was reached
+    parent = {
+        start: None
+    }
+
+    # Directions:
+    # dr, dc, wall index
+    directions = [
+        (-1, 0, 0),  # North
+        (1, 0, 1),   # South
+        (0, 1, 2),   # East
+        (0, -1, 3)   # West
+    ]
+
+    while queue:
+
+        row, col = queue.popleft()
+
+        # Goal reached
+        if (row, col) == goal:
+            break
+
+        for dr, dc, wall_index in directions:
+
+            nr = row + dr
+            nc = col + dc
+
+            # Outside maze
+            if not (
+                0 <= nr < rows
+                and 0 <= nc < cols
+            ):
+                continue
+
+            # Wall blocks movement
+            if walls[row][col][wall_index]:
+                continue
+
+            next_cell = (nr, nc)
+
+            # Already visited
+            if next_cell in parent:
+                continue
+
+            parent[next_cell] = (row, col)
+
+            queue.append(next_cell)
+
+    # No path
+    if goal not in parent:
+        return []
+
+    # Reconstruct path
+    path = []
+
+    current = goal
+
+    while current is not None:
+
+        path.append(current)
+
+        current = parent[current]
+
+    # Reverse:
+    # goal -> start
+    # becomes
+    # start -> goal
+    path.reverse()
+
+    return path
